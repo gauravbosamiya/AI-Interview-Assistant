@@ -1,6 +1,8 @@
-def main():
-    print("Hello from ai-interview-assistant!")
+import streamlit as st 
+from frontend.upload_file import upload_document
+
+st.set_page_config(page_title="AI Interview Assistant", layout="wide")
+st.title("AI Interview Assistant")
 
 
-if __name__ == "__main__":
-    main()
+upload_document()
