@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Query
 from api.api_utils import extract_text_from_file
 from uuid import uuid4
 import os
@@ -7,7 +7,7 @@ from typing import Annotated, List
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 from dotenv import load_dotenv
-from api.mongo import resume_collection
+from api.mongo import resume_collection, user_collection
 
 load_dotenv()
 
@@ -53,7 +53,7 @@ def home():
     return {"message": "AI Interview Assistant"}
 
 @app.post("/generate-question", response_model=QuestionSchema)
-async def generate_question(file: UploadFile = File(...)):
+async def generate_question(file: UploadFile = File(...), username: str = Form(...)):
     allowed_types = ['.pdf', '.docx']
     file_extension = os.path.splitext(file.filename)[1].lower()
     if file_extension not in allowed_types:
@@ -65,6 +65,12 @@ async def generate_question(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to extract text: {str(e)}")
 
+    user = user_collection.find_one({"username": username})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    
+    user_id = user['_id']
 
     llm = ChatGroq(model="meta-llama/llama-4-maverick-17b-128e-instruct")
     formatted_prompt = prompt.format(context=text, question="")
@@ -77,9 +83,24 @@ async def generate_question(file: UploadFile = File(...)):
     file_id = str(uuid4())
     resume_collection.insert_one({
         "file_id": file_id,
+        "user_id":user_id,
         "filename": file.filename,
         "text": text,
         "questions":questions
     })
     
     return {"questions": questions, "file_id": file_id, "filename": file.filename}
+
+@app.get("/get-questions")
+def get_qeustions(file_id:str=Query(...),username:str=Query(...)):
+    user = user_collection.find_one({'username':username})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user_id = user['_id']
+        
+    resume = resume_collection.find_one({'file_id':file_id, 'user_id':user_id})
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found for this user.")
+
+    return {"questions":resume.get("questions",[])}

@@ -9,3 +9,4 @@ client = MongoClient(MONGODB_URL_KEY)
 
 db = client["interview_db"]
 resume_collection = db["resume"]
+user_collection=db["user"]
